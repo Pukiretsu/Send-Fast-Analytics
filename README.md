@@ -70,4 +70,4 @@ Este proyecto fue desarrollado por un equipo de 4 personas utilizando **Kanban**
 ---
 *Desarrollado como proyecto final para el bootcamp de cloud computing cohorte 2 - 2026*
 
-[![Formación](https://img.shields.io/badge/Formación-BETEK%20|%20Cloud%20Computing-blueviolet?style=flat&logo=buffer)](https://betek.la/)
+[![Formación](https://img.shields.io/badge/Formación-BeTek%20|%20Cloud%20Computing-blueviolet?style=flat&logo=buffer)](https://betek.la/)
