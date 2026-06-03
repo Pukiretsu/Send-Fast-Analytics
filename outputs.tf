@@ -1,11 +1,50 @@
-output "cloudfront_url" {
-  description = "URL pública HTTPS del frontend estático."
-  value       = "https://${module.s3_frontend.cloudfront_domain_name}"
+# ---------------------------------------------------------
+# 🔐 SEGURIDAD Y AUTENTICACIÓN (Cognito)
+# ---------------------------------------------------------
+output "cognito_user_pool_id" {
+  value       = module.auth_cognito.user_pool_id
+  description = "ID del User Pool generado para configurar la seguridad en API Gateway"
 }
 
-output "api_gateway_orders_url" {
-  description = "Endpoint POST /orders para ingesta de órdenes."
-  value       = "${module.api_gateway.invoke_url}/orders"
+output "cognito_client_id" {
+  value       = module.auth_cognito.client_id
+  description = "ID del Aplicativo Cliente (Client ID) para la generación del token JWT en tus scripts"
+}
+
+# ---------------------------------------------------------
+# 🛰️ CAPA DE INGESTA (API Gateway & DynamoDB)
+# ---------------------------------------------------------
+output "api_ingesta_url" {
+  value       = "${module.api_gateway.api_endpoint}/ingesta"
+  description = "Endpoint exacto para enviar las ráfagas POST de los JSON simulados"
+}
+
+output "dynamodb_table_name" {
+  value       = module.dynamodb_pedidos.table_name
+  description = "Nombre de la tabla transaccional de DynamoDB para monitoreo"
+}
+
+# ---------------------------------------------------------
+# 🏛️ CAPA ANALÍTICA (S3 & Athena)
+# ---------------------------------------------------------
+output "s3_webapp_endpoint" {
+  value       = module.s3_webapp.website_endpoint
+  description = "URL pública para acceder a tu interfaz estática de Bootstrap"
+}
+
+output "athena_workgroup_name" {
+  value       = module.athena_analytics.workgroup_name
+  description = "Nombre del Workgroup de Athena"
+}
+
+output "glue_database_name" {
+  value       = module.glue_catalog_orders.database_name
+  description = "Nombre de la base de datos Glue Catalog"
+}
+
+output "glue_orders_table_name" {
+  value       = module.glue_catalog_orders.table_name
+  description = "Nombre de la tabla Glue Catalog para pedidos"
 }
 
 output "grafana_alb_url" {
@@ -13,22 +52,20 @@ output "grafana_alb_url" {
   value       = module.ec2_grafana.grafana_url
 }
 
-output "dynamodb_table_name" {
-  description = "Nombre de la tabla DynamoDB de órdenes."
-  value       = module.backend_processing.dynamodb_table_name
+# ---------------------------------------------------------
+# 📊 GRAFANA
+# ---------------------------------------------------------
+output "grafana_public_ip" {
+  value       = module.ec2_grafana.public_ip
+  description = "IP pública de la instancia EC2 con Grafana"
 }
 
-output "raw_bucket_name" {
-  description = "Bucket Raw del Data Lake."
-  value       = module.datalake_storage.raw_bucket_name
+output "grafana_public_dns" {
+  value       = module.ec2_grafana.public_dns
+  description = "DNS público de la instancia EC2 con Grafana"
 }
 
-output "trusted_bucket_name" {
-  description = "Bucket Trusted del Data Lake."
-  value       = module.datalake_storage.trusted_bucket_name
-}
-
-output "refined_bucket_name" {
-  description = "Bucket Refined del Data Lake."
-  value       = module.datalake_storage.refined_bucket_name
+output "grafana_url" {
+  value       = module.ec2_grafana.grafana_url
+  description = "URL pública para acceder a Grafana"
 }

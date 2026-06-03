@@ -1,0 +1,6 @@
+{
+  "name": "Food Delivery Dashboard",
+  "description": "An MVC-structured food delivery dashboard featuring Cognito authentication, API Gateway integration, and real-time order calculation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

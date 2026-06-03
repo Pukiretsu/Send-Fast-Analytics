@@ -1,35 +1,40 @@
+# ---------------------------------------------------------
+# 🌍 Configuración Global de AWS
+# ---------------------------------------------------------
 variable "aws_region" {
-  description = "Región AWS donde se desplegará la solución."
   type        = string
+  description = "Región de AWS donde se desplegarán los recursos"
   default     = "us-east-1"
 }
 
-variable "project_name" {
-  description = "Nombre base del proyecto usado para nombrar recursos."
+# ---------------------------------------------------------
+# 🔐 Usuarios Cognito
+# ---------------------------------------------------------
+variable "cognito_users" {
+  type = map(object({
+    username = string
+    email    = string
+    password = string
+  }))
+
+  description = "Mapa de usuarios que se inyectará dinámicamente en Cognito"
+  sensitive   = true
+}
+
+# ---------------------------------------------------------
+# 🧩 Layer oficial AWS SDK for pandas / awswrangler
+# ---------------------------------------------------------
+variable "awswrangler_layer_arn" {
+  description = "ARN del layer oficial AWS SDK for pandas / awswrangler"
   type        = string
-  default     = "serverless-datalake"
+  default     = "arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python311:31"
 }
 
-variable "environment" {
-  description = "Ambiente de despliegue."
-  type        = string
-  default     = "dev"
-}
-
-variable "tags" {
-  description = "Tags adicionales para los recursos."
-  type        = map(string)
-  default     = {}
-}
-
-variable "lambda_runtime" {
-  description = "Runtime de Python para la Lambda."
-  type        = string
-  default     = "python3.12"
-}
-
+# ---------------------------------------------------------
+# 📊 Grafana EC2
+# ---------------------------------------------------------
 variable "grafana_admin_user" {
-  description = "Usuario administrador inicial de Grafana."
+  description = "Usuario administrador inicial de Grafana"
   type        = string
   default     = "admin"
 }
@@ -41,54 +46,34 @@ variable "grafana_admin_password" {
   default     = "ChangeMe12345!"
 }
 
-variable "vpc_cidr" {
-  description = "CIDR de la VPC básica creada para ECS Fargate."
-  type        = string
-  default     = "10.20.0.0/16"
-}
-
-variable "availability_zones" {
-  description = "Zonas de disponibilidad para subredes públicas y privadas."
-  type        = list(string)
-  default     = ["us-east-1a", "us-east-1b"]
-}
-
-variable "allowed_grafana_cidr_blocks" {
-  description = "CIDR permitidos para acceder al ALB público de Grafana por HTTP."
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-}
-
-
-variable "grafana_cpu" {
-  description = "CPU para tarea Fargate de Grafana."
-  type        = number
-  default     = 512
-}
-
-variable "grafana_memory" {
-  description = "Memoria para tarea Fargate de Grafana."
-  type        = number
-  default     = 1024
-}
-
-variable "grafana_desired_count" {
-  description = "Número deseado de tareas Grafana."
-  type        = number
-  default     = 1
-}
-
-
 variable "grafana_instance_type" {
-  description = "Tipo de instancia EC2 para Grafana."
+  description = "Tipo de instancia EC2 para Grafana"
   type        = string
   default     = "t3.micro"
 }
 
 variable "grafana_volume_size" {
-  description = "Tamaño del volumen raíz de Grafana en GB."
+  description = "Tamaño del volumen raíz de Grafana en GB"
   type        = number
   default     = 20
+}
+
+variable "vpc_cidr" {
+  description = "CIDR de la VPC creada para la instancia EC2 de Grafana"
+  type        = string
+  default     = "10.20.0.0/16"
+}
+
+variable "availability_zones" {
+  description = "Zonas de disponibilidad para las subredes públicas de Grafana"
+  type        = list(string)
+  default     = ["us-east-1a", "us-east-1b"]
+}
+
+variable "allowed_grafana_cidr_blocks" {
+  description = "CIDR permitidos para acceder a Grafana por el puerto 3000"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 }
 
 variable "ssh_cidr_blocks" {
@@ -98,7 +83,7 @@ variable "ssh_cidr_blocks" {
 }
 
 variable "key_name" {
-  description = "Nombre de key pair existente para SSH. Si es null, no se configura key pair."
+  description = "Nombre de Key Pair existente para SSH. Si es null, no se configura key pair."
   type        = string
   default     = null
 }

@@ -32,7 +32,9 @@ resource "aws_vpc" "this" {
   enable_dns_support   = true
 
   tags = {
-    Name = "${local.name}-vpc"
+    Name        = "${local.name}-vpc"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -40,7 +42,9 @@ resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
 
   tags = {
-    Name = "${local.name}-igw"
+    Name        = "${local.name}-igw"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -53,7 +57,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${local.name}-public-${count.index + 1}"
+    Name        = "${local.name}-public-${count.index + 1}"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -61,7 +67,9 @@ resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
 
   tags = {
-    Name = "${local.name}-public-rt"
+    Name        = "${local.name}-public-rt"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -83,6 +91,12 @@ resource "aws_s3_bucket" "athena_results" {
 
   bucket        = "${var.name_prefix}-athena-results-${var.account_id}"
   force_destroy = false
+
+  tags = {
+    Name        = "${var.name_prefix}-athena-results-${var.account_id}"
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "athena_results" {
@@ -141,7 +155,9 @@ resource "aws_security_group" "grafana" {
   }
 
   tags = {
-    Name = "${local.name}-sg"
+    Name        = "${local.name}-sg"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -158,11 +174,17 @@ resource "aws_iam_role" "grafana" {
       Action = "sts:AssumeRole"
     }]
   })
+
+  tags = {
+    Name        = "${local.short_name}-ec2-role"
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
 resource "aws_iam_policy" "grafana_athena" {
   name        = "${local.short_name}-athena-policy"
-  description = "Permisos para Grafana EC2 sobre Athena, Glue y S3 Refined."
+  description = "Permisos para Grafana EC2 sobre Athena, Glue y S3 Stage."
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -190,7 +212,7 @@ resource "aws_iam_policy" "grafana_athena" {
         Resource = "*"
       },
       {
-        Sid    = "ListRefinedAndAthenaResults"
+        Sid    = "ListStageAndAthenaResults"
         Effect = "Allow"
         Action = [
           "s3:ListBucket"
@@ -201,7 +223,7 @@ resource "aws_iam_policy" "grafana_athena" {
         ]
       },
       {
-        Sid    = "ReadRefinedObjects"
+        Sid    = "ReadStageObjects"
         Effect = "Allow"
         Action = [
           "s3:GetObject"
@@ -220,6 +242,12 @@ resource "aws_iam_policy" "grafana_athena" {
       }
     ]
   })
+
+  tags = {
+    Name        = "${local.short_name}-athena-policy"
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "grafana_athena" {
@@ -262,7 +290,9 @@ resource "aws_instance" "grafana" {
   }
 
   tags = {
-    Name = "${local.name}-ec2"
+    Name        = "${local.name}-ec2"
+    Project     = var.project_name
+    Environment = var.environment
   }
 
   depends_on = [
