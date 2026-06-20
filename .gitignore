@@ -3,7 +3,6 @@
 # ==========================================
 # Directorios de trabajo locales 
 .terraform/
-.terraform.lock.hcl
 
 # Archivos de estado 
 *.tfstate
@@ -84,3 +83,15 @@ yarn-error.log*
 # Archivos de sistema
 .DS_Store
 Thumbs.db
+
+# Planes y outputs locales de Terraform
+*.tfplan
+tfplan
+tfoutputs.json
+
+# Artefactos generados de Lambdas
+modules/lambda/files/*.zip
+
+# Env generados por CI/CD
+.env.production
+.env.staging
