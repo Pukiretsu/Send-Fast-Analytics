@@ -3,7 +3,7 @@
 # ---------------------------------------------------------
 variable "aws_region" {
   type        = string
-  description = "Región de AWS donde se desplegarán los recursos"
+  description = "Región de AWS donde se desplegarán los recursos. Para esta arquitectura se recomienda us-east-1."
   default     = "us-east-1"
 }
 
@@ -17,7 +17,7 @@ variable "cognito_users" {
     password = string
   }))
 
-  description = "Mapa de usuarios que se inyectará dinámicamente en Cognito"
+  description = "Mapa de usuarios iniciales de Cognito. Inyectar solo desde secretos del pipeline o tfvars local excluido del repositorio."
   sensitive   = true
 }
 
@@ -25,7 +25,7 @@ variable "cognito_users" {
 # 🧩 Layer oficial AWS SDK for pandas / awswrangler
 # ---------------------------------------------------------
 variable "awswrangler_layer_arn" {
-  description = "ARN del layer oficial AWS SDK for pandas / awswrangler"
+  description = "ARN del layer oficial AWS SDK for pandas / awswrangler compatible con Python 3.11"
   type        = string
   default     = "arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python311:31"
 }
@@ -33,17 +33,9 @@ variable "awswrangler_layer_arn" {
 # ---------------------------------------------------------
 # 📊 Grafana EC2
 # ---------------------------------------------------------
-variable "grafana_admin_user" {
-  description = "Usuario administrador inicial de Grafana"
+variable "grafana_admin_secret_arn" {
+  description = "ARN de AWS Secrets Manager con JSON {\"username\":\"...\",\"password\":\"...\"} para el primer usuario administrador de Grafana."
   type        = string
-  default     = "admin"
-}
-
-variable "grafana_admin_password" {
-  description = "Contraseña administradora inicial de Grafana. Cambiar en producción."
-  type        = string
-  sensitive   = true
-  default     = "ChangeMe12345!"
 }
 
 variable "grafana_instance_type" {
@@ -71,9 +63,9 @@ variable "availability_zones" {
 }
 
 variable "allowed_grafana_cidr_blocks" {
-  description = "CIDR permitidos para acceder a Grafana por el puerto 3000"
+  description = "CIDR permitidos para acceder a Grafana por el puerto 3000. Por seguridad el valor por defecto no expone Grafana públicamente."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = []
 }
 
 variable "ssh_cidr_blocks" {

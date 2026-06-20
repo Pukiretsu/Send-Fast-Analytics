@@ -1,0 +1,23 @@
+# Copia este archivo como terraform.tfvars para pruebas locales.
+# No subas terraform.tfvars al repositorio.
+
+aws_region = "us-east-1"
+
+cognito_users = {
+  admin = {
+    username = "admin_analytics"
+    email    = "admin@example.com"
+    password = "ChangeThisPassword123!"
+  }
+}
+
+# Crear previamente este secreto en AWS Secrets Manager con JSON:
+# {"username":"admin","password":"ChangeThisPassword123!"}
+grafana_admin_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:sendfast/dev/grafana/admin-AbCdEf"
+
+# Recomendado: usa tu IP pública /32. Dejar [] bloquea acceso público a Grafana.
+allowed_grafana_cidr_blocks = ["TU_IP_PUBLICA/32"]
+
+# SSH deshabilitado por defecto.
+ssh_cidr_blocks = []
+key_name        = null

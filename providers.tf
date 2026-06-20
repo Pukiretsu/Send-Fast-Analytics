@@ -6,17 +6,33 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 
-  backend "s3" {
-    bucket         = "sendfast-analytics-terraform-state" # El bucket del Paso 1
-    key            = "ingesta/ingesta.tfstate"            # Ruta del archivo dentro del bucket
-    region         = "us-east-2"
-    dynamodb_table = "terraform-lock-table" # La tabla del Paso 2
-    encrypt        = true                   # Encriptación en reposo por defecto
-  }
+  # Backend remoto preparado para CI/CD.
+  # Los valores se inyectan desde GitHub Actions con -backend-config para no dejar
+  # nombres de buckets/tablas acoplados al repositorio.
+  backend "s3" {}
 }
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = local.common_tags
+  }
+}
+
+
+provider "aws" {
+  alias  = "global"
+  region = "us-east-1"
+
+  default_tags {
+    tags = local.common_tags
+  }
 }

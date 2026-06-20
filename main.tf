@@ -75,14 +75,40 @@ module "s3_webapp" {
   source              = "./modules/s3"
   bucket_name         = "sendfast-analytics-web-app-${local.environment}"
   environment         = local.environment
-  block_public_access = false
+  block_public_access = true
+}
 
-  website_config = {
-    index_document = "index.html"
-    error_document = "error.html"
+
+# ---------------------------------------------------------
+# 🛡️ AWS WAF para CloudFront
+# ---------------------------------------------------------
+module "waf_cloudfront" {
+  source = "./modules/waf_cloudfront"
+
+  providers = {
+    aws = aws.global
   }
 
-  upload_directory = "${path.module}/src/web/dist"
+  project_name = local.project_name
+  environment  = local.environment
+}
+
+# ---------------------------------------------------------
+# 🌐 CloudFront para Web App
+# ---------------------------------------------------------
+
+module "cloudfront_webapp" {
+  source = "./modules/cloudfront_web"
+
+  project_name = local.project_name
+  environment  = local.environment
+
+  s3_bucket_id                   = module.s3_webapp.bucket_id
+  s3_bucket_arn                  = module.s3_webapp.bucket_arn
+  s3_bucket_regional_domain_name = module.s3_webapp.bucket_regional_domain_name
+
+  price_class = "PriceClass_100"
+  web_acl_id  = module.waf_cloudfront.web_acl_arn
 }
 
 # ---------------------------------------------------------
@@ -266,8 +292,8 @@ module "eventbridge" {
 
   rules = {
     etl_every_15_minutes = {
-      description          = "Ejecuta Lambda ETL cada 5 minutos para convertir JSON a Parquet"
-      schedule_expression  = "rate(5 minutes)"
+      description          = "Ejecuta Lambda ETL cada 15 minutos para convertir JSON a Parquet"
+      schedule_expression  = "rate(15 minutes)"
       enabled              = true
       target_arn           = module.microservicios_lambda.lambda_function_arns["etl"]
       lambda_function_name = module.microservicios_lambda.lambda_function_names["etl"]
@@ -313,12 +339,15 @@ module "ec2_grafana" {
   refined_bucket_arn  = module.s3_data_stage.bucket_arn
 
   # Bucket existente para resultados de Athena
-  athena_results_bucket_arn = module.s3_athena_results.bucket_arn
+  create_athena_results_bucket = false
+  athena_results_bucket_name   = module.s3_athena_results.bucket_id
+  athena_results_bucket_arn    = module.s3_athena_results.bucket_arn
 
-  grafana_admin_user     = var.grafana_admin_user
-  grafana_admin_password = var.grafana_admin_password
-  grafana_instance_type  = var.grafana_instance_type
-  grafana_volume_size    = var.grafana_volume_size
+  grafana_admin_secret_arn = var.grafana_admin_secret_arn
+  grafana_instance_type    = var.grafana_instance_type
+  grafana_volume_size      = var.grafana_volume_size
+  glue_database_name       = module.glue_catalog_orders.database_name
+  athena_workgroup_name    = module.athena_analytics.workgroup_name
 
   ssh_cidr_blocks = var.ssh_cidr_blocks
   key_name        = var.key_name
