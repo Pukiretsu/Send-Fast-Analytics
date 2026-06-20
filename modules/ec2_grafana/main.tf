@@ -1,9 +1,9 @@
 locals {
   name                 = "${var.name_prefix}-grafana"
   short_name           = substr(replace("${var.name_prefix}-grafana", "_", "-"), 0, 24)
-  create_athena_bucket = var.athena_results_bucket_arn == null
-  athena_bucket_arn    = local.create_athena_bucket ? aws_s3_bucket.athena_results[0].arn : var.athena_results_bucket_arn
-  athena_bucket_name   = replace(local.athena_bucket_arn, "arn:aws:s3:::", "")
+  create_athena_bucket = var.create_athena_results_bucket
+  athena_bucket_arn    = var.create_athena_results_bucket ? aws_s3_bucket.athena_results[0].arn : var.athena_results_bucket_arn
+  athena_bucket_name   = var.create_athena_results_bucket ? aws_s3_bucket.athena_results[0].bucket : var.athena_results_bucket_name
 }
 
 data "aws_ami" "amazon_linux_2023" {
@@ -87,7 +87,7 @@ resource "aws_route_table_association" "public" {
 }
 
 resource "aws_s3_bucket" "athena_results" {
-  count = local.create_athena_bucket ? 1 : 0
+  count = var.create_athena_results_bucket ? 1 : 0
 
   bucket        = "${var.name_prefix}-athena-results-${var.account_id}"
   force_destroy = false
@@ -100,7 +100,7 @@ resource "aws_s3_bucket" "athena_results" {
 }
 
 resource "aws_s3_bucket_public_access_block" "athena_results" {
-  count = local.create_athena_bucket ? 1 : 0
+  count = var.create_athena_results_bucket ? 1 : 0
 
   bucket                  = aws_s3_bucket.athena_results[0].id
   block_public_acls       = true
@@ -110,7 +110,7 @@ resource "aws_s3_bucket_public_access_block" "athena_results" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "athena_results" {
-  count = local.create_athena_bucket ? 1 : 0
+  count = var.create_athena_results_bucket ? 1 : 0
 
   bucket = aws_s3_bucket.athena_results[0].id
 
@@ -126,12 +126,16 @@ resource "aws_security_group" "grafana" {
   description = "Security Group para Grafana en EC2."
   vpc_id      = aws_vpc.this.id
 
-  ingress {
-    description = "Grafana HTTP 3000"
-    from_port   = 3000
-    to_port     = 3000
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_grafana_cidr_blocks
+  dynamic "ingress" {
+    for_each = length(var.allowed_grafana_cidr_blocks) > 0 ? [1] : []
+
+    content {
+      description = "Grafana HTTP 3000"
+      from_port   = 3000
+      to_port     = 3000
+      protocol    = "tcp"
+      cidr_blocks = var.allowed_grafana_cidr_blocks
+    }
   }
 
   dynamic "ingress" {
@@ -212,6 +216,14 @@ resource "aws_iam_policy" "grafana_athena" {
         Resource = "*"
       },
       {
+        Sid    = "ReadGrafanaAdminSecret"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = var.grafana_admin_secret_arn
+      },
+      {
         Sid    = "ListStageAndAthenaResults"
         Effect = "Allow"
         Action = [
@@ -277,11 +289,12 @@ resource "aws_instance" "grafana" {
   }
 
   user_data = templatefile("${path.module}/templates/user_data.sh.tpl", {
-    grafana_admin_user     = var.grafana_admin_user
-    grafana_admin_password = var.grafana_admin_password
-    aws_region             = var.aws_region
-    refined_bucket_name    = var.refined_bucket_name
-    athena_bucket_name     = local.athena_bucket_name
+    grafana_admin_secret_arn = var.grafana_admin_secret_arn
+    aws_region               = var.aws_region
+    refined_bucket_name      = var.refined_bucket_name
+    athena_bucket_name       = local.athena_bucket_name
+    glue_database_name       = var.glue_database_name
+    athena_workgroup_name    = var.athena_workgroup_name
   })
 
   metadata_options {

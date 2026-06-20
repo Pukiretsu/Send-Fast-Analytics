@@ -12,3 +12,8 @@ output "website_endpoint" {
   value       = length(aws_s3_bucket_website_configuration.this) > 0 ? aws_s3_bucket_website_configuration.this[0].website_endpoint : null
   description = "URL pública del sitio web estático (si está activo)"
 }
+
+output "bucket_regional_domain_name" {
+  value       = aws_s3_bucket.this.bucket_regional_domain_name
+  description = "Regional domain name del bucket S3"
+}

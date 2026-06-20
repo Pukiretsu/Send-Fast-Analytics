@@ -36,6 +36,7 @@ variable "availability_zones" {
 variable "allowed_grafana_cidr_blocks" {
   description = "CIDR permitidos para acceder a Grafana por el puerto 3000"
   type        = list(string)
+  default     = []
 }
 
 variable "refined_bucket_name" {
@@ -48,21 +49,37 @@ variable "refined_bucket_arn" {
   type        = string
 }
 
-variable "athena_results_bucket_arn" {
-  description = "ARN del bucket de resultados de Athena. Si es null, el módulo crea uno nuevo."
+variable "create_athena_results_bucket" {
+  description = "Define si el módulo de Grafana debe crear un bucket propio para resultados de Athena."
+  type        = bool
+  default     = false
+}
+
+variable "athena_results_bucket_name" {
+  description = "Nombre del bucket existente de resultados de Athena cuando create_athena_results_bucket es false."
   type        = string
   default     = null
 }
 
-variable "grafana_admin_user" {
-  description = "Usuario administrador de Grafana"
+variable "athena_results_bucket_arn" {
+  description = "ARN del bucket de resultados de Athena. Debe informarse cuando create_athena_results_bucket es false."
+  type        = string
+  default     = null
+}
+
+variable "grafana_admin_secret_arn" {
+  description = "ARN de AWS Secrets Manager con JSON {username,password} para configurar el administrador inicial de Grafana."
   type        = string
 }
 
-variable "grafana_admin_password" {
-  description = "Password administrador de Grafana"
+variable "glue_database_name" {
+  description = "Base de datos Glue que usará el datasource de Athena en Grafana"
   type        = string
-  sensitive   = true
+}
+
+variable "athena_workgroup_name" {
+  description = "Workgroup de Athena que usará Grafana"
+  type        = string
 }
 
 variable "grafana_instance_type" {

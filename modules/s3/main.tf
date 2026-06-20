@@ -23,23 +23,19 @@ resource "aws_s3_bucket_public_access_block" "this" {
 # 🔄 3. Versionado Automático (Recomendado para auditorías e ingesta)
 resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
+
   versioning_configuration {
-    status = "Disabled"
+    status = "Enabled"
   }
 }
 
-# 2. Recurso para vaciar el bucket antes de destruirlo
-resource "null_resource" "remove_s3_objects" {
-  depends_on = [aws_s3_bucket.this]
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
 
-  # Este comando corre localmente en tu máquina para vaciar el bucket
-  triggers = {
-    bucket_name = aws_s3_bucket.this.id
-  }
-
-  provisioner "local-exec" {
-    when    = destroy
-    command = "aws s3 rm s3://${self.triggers.bucket_name} --recursive"
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
   }
 }
 
