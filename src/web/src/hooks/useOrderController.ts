@@ -1,6 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
-import { CartItem, Restaurant, Order, Product } from '../types';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  CartItem,
+  CityZone,
+  Order,
+  PaymentMethod,
+  Product,
+  Restaurant,
+  SendFastOrderPayload,
+} from '../types';
 import { apiGatewayService } from '../services/api';
+
+const randomDeliveryTime = () => Math.floor(Math.random() * (55 - 15 + 1)) + 15;
 
 export function useOrderController() {
   const [activeRestaurant, setActiveRestaurant] = useState<Restaurant | null>(null);
@@ -9,33 +19,31 @@ export function useOrderController() {
   const [loading, setLoading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [lastPayload, setLastPayload] = useState<SendFastOrderPayload | null>(null);
 
-  // Initialize order list from localStorage if user is returning
   useEffect(() => {
     const savedOrders = localStorage.getItem('submitted_orders');
     if (savedOrders) {
       try {
         setOrders(JSON.parse(savedOrders));
       } catch {
-        // Safe bypass
+        localStorage.removeItem('submitted_orders');
       }
     }
   }, []);
 
-  // Persist orders to localStorage as backup
   const persistOrders = useCallback((updatedOrders: Order[]) => {
     setOrders(updatedOrders);
     localStorage.setItem('submitted_orders', JSON.stringify(updatedOrders));
   }, []);
 
-  /**
-   * Status transitions simulation to demonstrate MVC reactivity
-   */
   useEffect(() => {
     const activeInterval = setInterval(() => {
       let changed = false;
+
       const updated = orders.map((order) => {
         if (order.status === 'DELIVERED') return order;
+
         changed = true;
 
         let nextStatus = order.status;
@@ -50,41 +58,32 @@ export function useOrderController() {
       if (changed) {
         persistOrders(updated);
       }
-    }, 15000); // Transitions status every 15 seconds for realistic simulation
+    }, 15000);
 
     return () => clearInterval(activeInterval);
   }, [orders, persistOrders]);
 
-  /**
-   * Restaurant selection controls
-   * If user switches restaurants, warn them/clear their current cart
-   */
-  const selectRestaurant = useCallback((restaurant: Restaurant) => {
-    setValidationError(null);
-    setSuccessMessage(null);
-    if (activeRestaurant && activeRestaurant.id !== restaurant.id && cart.length > 0) {
-      // In a real app we might ask. We'll elegantly transition the restaurant & clear state.
-      setCart([]);
-    }
-    setActiveRestaurant(restaurant);
-  }, [activeRestaurant, cart]);
+  const selectRestaurant = useCallback(
+    (restaurant: Restaurant) => {
+      setValidationError(null);
+      setSuccessMessage(null);
 
-  /**
-   * Add a single product unit to Cart
-   */
-  const addToCart = useCallback((product: Product, restaurantId: string, restaurantName: string) => {
+      if (activeRestaurant && activeRestaurant.id !== restaurant.id && cart.length > 0) {
+        setCart([]);
+      }
+
+      setActiveRestaurant(restaurant);
+    },
+    [activeRestaurant, cart]
+  );
+
+  const addToCart = useCallback((product: Product) => {
     setValidationError(null);
     setSuccessMessage(null);
-    
-    // Ensure we are operating with the active restaurant corresponding to this selection
-    if (activeRestaurant && activeRestaurant.id !== restaurantId) {
-      // Automatic protection logic
-      setCart([{ product, quantity: 1 }]);
-      return;
-    }
 
     setCart((prevCart) => {
       const matchIndex = prevCart.findIndex((item) => item.product.id === product.id);
+
       if (matchIndex > -1) {
         const nextCart = [...prevCart];
         nextCart[matchIndex] = {
@@ -92,46 +91,31 @@ export function useOrderController() {
           quantity: nextCart[matchIndex].quantity + 1,
         };
         return nextCart;
-      } else {
-        return [...prevCart, { product, quantity: 1 }];
       }
-    });
-  }, [activeRestaurant]);
 
-  /**
-   * Remove or decrement quantity
-   */
+      return [...prevCart, { product, quantity: 1 }];
+    });
+  }, []);
+
   const removeFromCart = useCallback((productId: string) => {
     setValidationError(null);
+
     setCart((prevCart) => {
       const matchIndex = prevCart.findIndex((item) => item.product.id === productId);
       if (matchIndex === -1) return prevCart;
 
       const nextCart = [...prevCart];
+
       if (nextCart[matchIndex].quantity > 1) {
         nextCart[matchIndex] = {
           ...nextCart[matchIndex],
           quantity: nextCart[matchIndex].quantity - 1,
         };
         return nextCart;
-      } else {
-        return nextCart.filter((item) => item.product.id !== productId);
       }
-    });
-  }, []);
 
-  /**
-   * Explicitly set specific cart quantities
-   */
-  const updateQuantity = useCallback((productId: string, quantity: number) => {
-    setValidationError(null);
-    if (quantity <= 0) {
-      setCart((prev) => prev.filter((item) => item.product.id !== productId));
-      return;
-    }
-    setCart((prev) =>
-      prev.map((item) => (item.product.id === productId ? { ...item, quantity } : item))
-    );
+      return nextCart.filter((item) => item.product.id !== productId);
+    });
   }, []);
 
   const clearCart = useCallback(() => {
@@ -139,43 +123,56 @@ export function useOrderController() {
     setValidationError(null);
   }, []);
 
-  /**
-   * Computation calculations
-   */
   const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const deliveryFee = activeRestaurant ? activeRestaurant.deliveryFee : 0;
-  const tax = subtotal * 0.0825; // 8.25% standard sales tax
-  const total = subtotal > 0 ? subtotal + deliveryFee + tax : 0;
+  const total = subtotal > 0 ? subtotal + deliveryFee : 0;
 
-  /**
-   * Processes Order Form submission and relays request to the model database.
-   */
   const submitOrder = async (
-    deliveryAddress: string,
-    additionalInstructions: string = '',
-    paymentMethod: string = 'CARD'
+    ciudadZona: CityZone,
+    paymentMethod: PaymentMethod
   ): Promise<Order | null> => {
     setValidationError(null);
     setSuccessMessage(null);
 
-    // Dynamic validations
     if (!activeRestaurant) {
-      setValidationError('Please select a restaurant to complete your order.');
-      return null;
-    }
-    if (cart.length === 0) {
-      setValidationError('Your shopping cart is empty. Please add items to order.');
-      return null;
-    }
-    if (!deliveryAddress.trim()) {
-      setValidationError('Delivery address is a required field.');
+      setValidationError('Selecciona un restaurante para continuar.');
       return null;
     }
 
+    if (cart.length === 0) {
+      setValidationError('El carrito está vacío. Agrega productos para generar la venta.');
+      return null;
+    }
+
+    const nowIso = new Date().toISOString();
+    const orderId = crypto.randomUUID();
+    const tiempoEntrega = randomDeliveryTime();
+
+    const payload: SendFastOrderPayload = {
+      orderId,
+      timestamp: nowIso,
+      ciudad_zona: ciudadZona,
+      estado_pedido: 'ENTREGADO',
+      monto: Number(total.toFixed(0)),
+      tiempo_entrega: tiempoEntrega,
+      metodo_pago: paymentMethod,
+    };
+
     setLoading(true);
+    setLastPayload(payload);
+
     try {
-      const orderPayload = {
-        restaurantId: activeRestaurant.id,
+      await apiGatewayService.createDeliveryOrder(payload);
+
+      const resultOrder: Order = {
+        id: orderId,
+        orderId,
+        ciudad_zona: ciudadZona,
+        metodo_pago: paymentMethod,
+        monto: payload.monto,
+        tiempo_entrega: tiempoEntrega,
+        status: 'PENDING',
+        createdAt: nowIso,
         restaurantName: activeRestaurant.name,
         items: cart.map((item) => ({
           productId: item.product.id,
@@ -183,25 +180,18 @@ export function useOrderController() {
           price: item.product.price,
           quantity: item.quantity,
         })),
-        subtotal: Number(subtotal.toFixed(2)),
-        deliveryFee: Number(deliveryFee.toFixed(2)),
-        tax: Number(tax.toFixed(2)),
-        total: Number(total.toFixed(2)),
       };
 
-      // Communicate directly with the model gateway API
-      const resultOrder = await apiGatewayService.createOrder(orderPayload);
-      
-      // Update local storage and view cache
-      const freshOrdersList = [resultOrder, ...orders];
-      persistOrders(freshOrdersList);
-
-      // Empties transaction buffer
+      persistOrders([resultOrder, ...orders]);
       setCart([]);
-      setSuccessMessage(`Order #${resultOrder.id.replace('ord_', '')} placed successfully! Standard delivery in ${activeRestaurant.deliveryTime}.`);
+      setSuccessMessage(`Venta enviada correctamente. OrderId: ${orderId}`);
       return resultOrder;
     } catch (err: any) {
-      setValidationError(err.message || 'System encountered an unexpected error processing your order.');
+      setValidationError(
+        err.response?.data?.error ||
+          err.message ||
+          'No fue posible enviar la venta al API Gateway.'
+      );
       return null;
     } finally {
       setLoading(false);
@@ -217,12 +207,11 @@ export function useOrderController() {
     successMessage,
     subtotal,
     deliveryFee,
-    tax,
     total,
+    lastPayload,
     selectRestaurant,
     addToCart,
     removeFromCart,
-    updateQuantity,
     clearCart,
     submitOrder,
   };

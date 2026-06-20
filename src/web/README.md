@@ -1,20 +1,39 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# SendFast Analytics Web
 
-# Run and deploy your AI Studio app
+Aplicación React + Vite que simula el canal operativo de SendFast y envía pedidos al API Gateway protegido con Cognito JWT.
 
-This contains everything you need to run your app locally.
+## Variables de entorno
 
-View your app in AI Studio: https://ai.studio/apps/4adef547-c5d2-4312-bb56-bebe9a766b62
+La aplicación usa variables públicas de Vite. No son secretos, pero deben venir de la infraestructura desplegada.
 
-## Run Locally
+```text
+VITE_API_URL=https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/ingesta
+VITE_USER_POOL_ID=us-east-1_xxxxxxxxx
+VITE_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
+```
 
-**Prerequisites:**  Node.js
+En CI/CD estas variables se generan automáticamente desde `terraform output -json`. Para desarrollo local puedes copiar `.env.example`:
 
+```bash
+cp .env.example .env.local
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Desarrollo local
+
+```bash
+npm install
+npm run dev
+```
+
+## Validación y build
+
+```bash
+npm run lint
+npm run build
+```
+
+El build final queda en `dist/` y el pipeline lo publica en el bucket S3 privado creado por Terraform.
+
+## Modo mock
+
+Si `VITE_USER_POOL_ID` o `VITE_CLIENT_ID` no están configuradas, la pantalla de login permite un modo mock local para facilitar pruebas visuales. En producción estas variables deben estar presentes.

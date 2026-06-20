@@ -77,10 +77,10 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             <Shield className="h-7 w-7 text-white" />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold tracking-tight text-slate-800 font-sans">
-            FeastFlow<span className="text-indigo-600">Dash</span>
+            SendFast<span className="text-indigo-600">Analytics</span>
           </h2>
           <p className="mt-2 text-center text-sm text-slate-500">
-            Secure operator portal for food delivery dispatches
+            Portal seguro para simular ventas de domicilios
           </p>
         </div>
 
@@ -220,7 +220,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             <div className="flex justify-between border-b border-slate-100 pb-1.5">
               <span className="text-slate-400">STATUS:</span>
               <span className={`font-bold ${isCognitoConfigured ? 'text-indigo-600' : 'text-amber-600'}`}>
-                {isCognitoConfigured ? '● AWS LIVE ROUTING' : '○ SIMULATED / DEMO MODE'}
+                {isCognitoConfigured ? '● COGNITO ACTIVO' : '○ MODO DEMO'}
               </span>
             </div>
             <div className="flex justify-between border-b border-slate-100 pb-1.5">
