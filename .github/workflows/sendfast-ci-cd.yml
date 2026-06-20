@@ -1,0 +1,286 @@
+name: SendFast CI/CD
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  TF_VERSION: 1.8.5
+  NODE_VERSION: 22
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  TF_STATE_KEY: ${{ vars.TF_STATE_KEY || 'sendfast/dev/terraform.tfstate' }}
+  GRAFANA_SECRET_NAME: ${{ vars.GRAFANA_SECRET_NAME || 'sendfast/dev/grafana/admin' }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform_quality:
+    name: Terraform quality gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init without backend
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+  web_quality_build:
+    name: Web quality and build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: src/web
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Create mock build environment
+        working-directory: src/web
+        run: |
+          cat > .env.production <<'ENV'
+          VITE_API_URL=https://example.execute-api.us-east-1.amazonaws.com/ingesta
+          VITE_USER_POOL_ID=us-east-1_example
+          VITE_CLIENT_ID=exampleclientid
+          ENV
+
+      - name: TypeScript check
+        working-directory: src/web
+        run: npm run lint
+
+      - name: Build web app
+        working-directory: src/web
+        run: npm run build
+
+  terraform_deploy:
+    name: Terraform deploy and export outputs
+    runs-on: ubuntu-latest
+    needs:
+      - terraform_quality
+      - web_quality_build
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    outputs:
+      api_ingesta_url: ${{ steps.tfoutputs.outputs.api_ingesta_url }}
+      cognito_user_pool_id: ${{ steps.tfoutputs.outputs.cognito_user_pool_id }}
+      cognito_client_id: ${{ steps.tfoutputs.outputs.cognito_client_id }}
+      webapp_bucket_name: ${{ steps.tfoutputs.outputs.webapp_bucket_name }}
+      cloudfront_distribution_id: ${{ steps.tfoutputs.outputs.cloudfront_distribution_id }}
+      cloudfront_webapp_url: ${{ steps.tfoutputs.outputs.cloudfront_webapp_url }}
+      grafana_url: ${{ steps.tfoutputs.outputs.grafana_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Create or update Grafana admin secret
+        id: grafana_secret
+        env:
+          GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$GRAFANA_ADMIN_USER" ] || [ -z "$GRAFANA_ADMIN_PASSWORD" ]; then
+            echo "GRAFANA_ADMIN_USER and GRAFANA_ADMIN_PASSWORD secrets are required." >&2
+            exit 1
+          fi
+
+          SECRET_PAYLOAD=$(jq -nc \
+            --arg username "$GRAFANA_ADMIN_USER" \
+            --arg password "$GRAFANA_ADMIN_PASSWORD" \
+            '{username: $username, password: $password}')
+
+          if aws secretsmanager describe-secret --secret-id "$GRAFANA_SECRET_NAME" >/dev/null 2>&1; then
+            aws secretsmanager put-secret-value \
+              --secret-id "$GRAFANA_SECRET_NAME" \
+              --secret-string "$SECRET_PAYLOAD" >/dev/null
+          else
+            aws secretsmanager create-secret \
+              --name "$GRAFANA_SECRET_NAME" \
+              --description "SendFast Grafana initial admin credentials" \
+              --secret-string "$SECRET_PAYLOAD" >/dev/null
+          fi
+
+          SECRET_ARN=$(aws secretsmanager describe-secret \
+            --secret-id "$GRAFANA_SECRET_NAME" \
+            --query ARN \
+            --output text)
+
+          echo "grafana_secret_arn=$SECRET_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform init with remote backend
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ env.TF_STATE_KEY }}" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      - name: Load optional Terraform variables from secrets
+        env:
+          TF_VAR_ALLOWED_GRAFANA_CIDR_BLOCKS_SECRET: ${{ secrets.TF_VAR_ALLOWED_GRAFANA_CIDR_BLOCKS }}
+          TF_VAR_SSH_CIDR_BLOCKS_SECRET: ${{ secrets.TF_VAR_SSH_CIDR_BLOCKS }}
+          TF_VAR_KEY_NAME_SECRET: ${{ secrets.TF_VAR_KEY_NAME }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$TF_VAR_ALLOWED_GRAFANA_CIDR_BLOCKS_SECRET" ]; then
+            printf 'TF_VAR_allowed_grafana_cidr_blocks=%s\n' "$TF_VAR_ALLOWED_GRAFANA_CIDR_BLOCKS_SECRET" >> "$GITHUB_ENV"
+          fi
+
+          if [ -n "$TF_VAR_SSH_CIDR_BLOCKS_SECRET" ]; then
+            printf 'TF_VAR_ssh_cidr_blocks=%s\n' "$TF_VAR_SSH_CIDR_BLOCKS_SECRET" >> "$GITHUB_ENV"
+          fi
+
+          if [ -n "$TF_VAR_KEY_NAME_SECRET" ]; then
+            printf 'TF_VAR_key_name=%s\n' "$TF_VAR_KEY_NAME_SECRET" >> "$GITHUB_ENV"
+          fi
+
+      - name: Terraform plan
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_cognito_users: ${{ secrets.TF_VAR_COGNITO_USERS }}
+          TF_VAR_grafana_admin_secret_arn: ${{ steps.grafana_secret.outputs.grafana_secret_arn }}
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform apply
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+          TF_VAR_cognito_users: ${{ secrets.TF_VAR_COGNITO_USERS }}
+          TF_VAR_grafana_admin_secret_arn: ${{ steps.grafana_secret.outputs.grafana_secret_arn }}
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Export Terraform outputs for web build
+        id: tfoutputs
+        run: |
+          set -euo pipefail
+
+          terraform output -json > tfoutputs.json
+
+          echo "api_ingesta_url=$(jq -r '.webapp_runtime_config.value.VITE_API_URL' tfoutputs.json)" >> "$GITHUB_OUTPUT"
+          echo "cognito_user_pool_id=$(jq -r '.webapp_runtime_config.value.VITE_USER_POOL_ID' tfoutputs.json)" >> "$GITHUB_OUTPUT"
+          echo "cognito_client_id=$(jq -r '.webapp_runtime_config.value.VITE_CLIENT_ID' tfoutputs.json)" >> "$GITHUB_OUTPUT"
+          echo "webapp_bucket_name=$(jq -r '.webapp_bucket_name.value' tfoutputs.json)" >> "$GITHUB_OUTPUT"
+          echo "cloudfront_distribution_id=$(jq -r '.cloudfront_distribution_id.value' tfoutputs.json)" >> "$GITHUB_OUTPUT"
+          echo "cloudfront_webapp_url=$(jq -r '.cloudfront_webapp_url.value' tfoutputs.json)" >> "$GITHUB_OUTPUT"
+          echo "grafana_url=$(jq -r '.grafana_url.value' tfoutputs.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Deployment summary
+        run: |
+          echo "### Terraform outputs" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Web: ${{ steps.tfoutputs.outputs.cloudfront_webapp_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Grafana: ${{ steps.tfoutputs.outputs.grafana_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- API: ${{ steps.tfoutputs.outputs.api_ingesta_url }}" >> "$GITHUB_STEP_SUMMARY"
+
+  web_build_deploy:
+    name: Build web with Terraform outputs and deploy
+    runs-on: ubuntu-latest
+    needs: terraform_deploy
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: src/web
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Inject Terraform outputs into Vite environment
+        working-directory: src/web
+        run: |
+          cat > .env.production <<ENV
+          VITE_API_URL=${{ needs.terraform_deploy.outputs.api_ingesta_url }}
+          VITE_USER_POOL_ID=${{ needs.terraform_deploy.outputs.cognito_user_pool_id }}
+          VITE_CLIENT_ID=${{ needs.terraform_deploy.outputs.cognito_client_id }}
+          ENV
+
+      - name: Build web app
+        working-directory: src/web
+        run: npm run build
+
+      - name: Upload immutable assets to S3
+        working-directory: src/web
+        run: |
+          aws s3 sync dist "s3://${{ needs.terraform_deploy.outputs.webapp_bucket_name }}" \
+            --delete \
+            --exclude "index.html" \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload index.html without cache
+        working-directory: src/web
+        run: |
+          aws s3 cp dist/index.html "s3://${{ needs.terraform_deploy.outputs.webapp_bucket_name }}/index.html" \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --content-type "text/html"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ needs.terraform_deploy.outputs.cloudfront_distribution_id }}" \
+            --paths "/*"
+
+      - name: Web deployment summary
+        run: |
+          echo "### Web deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ needs.terraform_deploy.outputs.cloudfront_webapp_url }}" >> "$GITHUB_STEP_SUMMARY"
