@@ -14,17 +14,13 @@ from botocore.exceptions import ClientError
 # ---------------------------------------------------------
 # Configuración principal
 # ---------------------------------------------------------
-API_URL = os.getenv(
-    "API_URL",
-    "https://yath7gmahf.execute-api.us-east-1.amazonaws.com/ingesta"
-)
-
+API_URL = os.getenv("API_URL", "")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-USER_POOL_ID = os.getenv("USER_POOL_ID", "us-east-1_QTeE35X5R")
-CLIENT_ID = os.getenv("CLIENT_ID", "1enifbqofi52ijmp8d83ea9lhc")
+USER_POOL_ID = os.getenv("USER_POOL_ID", "")
+CLIENT_ID = os.getenv("CLIENT_ID", "")
 
-USERNAME = os.getenv("COGNITO_USERNAME", "admin_analytics")
-PASSWORD = os.getenv("COGNITO_PASSWORD", "AdminPasswordSecure2026!")
+USERNAME = os.getenv("COGNITO_USERNAME", "")
+PASSWORD = os.getenv("COGNITO_PASSWORD", "")
 
 TOTAL_ORDERS = int(os.getenv("TOTAL_ORDERS", "4000"))
 ORDERS_PER_BATCH = int(os.getenv("ORDERS_PER_BATCH", "20"))
@@ -142,10 +138,30 @@ def random_timestamp_last_days() -> str:
     return random_datetime.isoformat()
 
 
+def validate_required_environment() -> None:
+    missing = [
+        name for name, value in {
+            "API_URL": API_URL,
+            "USER_POOL_ID": USER_POOL_ID,
+            "CLIENT_ID": CLIENT_ID,
+            "COGNITO_USERNAME": USERNAME,
+            "COGNITO_PASSWORD": PASSWORD,
+        }.items()
+        if not value
+    ]
+
+    if missing:
+        raise RuntimeError(
+            "Faltan variables de entorno requeridas para ejecutar la prueba de ingesta: "
+            + ", ".join(missing)
+        )
+
+
 def get_jwt_token() -> Optional[str]:
     """
     Obtiene un IdToken desde Cognito usando USER_PASSWORD_AUTH.
     """
+    validate_required_environment()
     client = boto3.client("cognito-idp", region_name=AWS_REGION)
 
     try:
