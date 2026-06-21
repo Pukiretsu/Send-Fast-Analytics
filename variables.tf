@@ -3,8 +3,8 @@
 # ---------------------------------------------------------
 variable "aws_region" {
   type        = string
-  description = "Región de AWS donde se desplegarán los recursos. Para esta arquitectura se recomienda us-east-1."
-  default     = "us-east-1"
+  description = "Región de AWS donde se desplegarán los recursos. Para esta arquitectura se recomienda us-east-2."
+  default     = "us-east-2"
 }
 
 # ---------------------------------------------------------
@@ -27,7 +27,7 @@ variable "cognito_users" {
 variable "awswrangler_layer_arn" {
   description = "ARN del layer oficial AWS SDK for pandas / awswrangler compatible con Python 3.11"
   type        = string
-  default     = "arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python311:31"
+  default     = "arn:aws:lambda:us-east-2:336392948345:layer:AWSSDKPandas-Python311:31"
 }
 
 # ---------------------------------------------------------
@@ -59,7 +59,7 @@ variable "vpc_cidr" {
 variable "availability_zones" {
   description = "Zonas de disponibilidad para las subredes públicas de Grafana"
   type        = list(string)
-  default     = ["us-east-1a", "us-east-1b"]
+  default     = ["us-east-2a", "us-east-2b"]
 }
 
 variable "allowed_grafana_cidr_blocks" {
