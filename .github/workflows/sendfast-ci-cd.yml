@@ -11,7 +11,7 @@ on:
 
 env:
   TF_VERSION: 1.8.5
-  NODE_VERSION: 20.19.0
+  NODE_VERSION: 11.6.2
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
   TF_STATE_KEY: ${{ vars.TF_STATE_KEY || 'sendfast/dev/terraform.tfstate' }}
   GRAFANA_SECRET_NAME: ${{ vars.GRAFANA_SECRET_NAME || 'sendfast/dev/grafana/admin' }}
