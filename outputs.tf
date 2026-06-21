@@ -57,7 +57,7 @@ output "cloudfront_webapp_url" {
 
 output "cloudfront_distribution_id" {
   value       = module.cloudfront_webapp.distribution_id
-  description = "ID de la distribución CloudFront para invalidaciones"
+  description = "ID de la dist CloudFront para invalidaciones"
 }
 
 output "webapp_runtime_config" {

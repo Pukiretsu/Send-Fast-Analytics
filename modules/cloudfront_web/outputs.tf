@@ -1,11 +1,11 @@
 output "distribution_id" {
   value       = aws_cloudfront_distribution.this.id
-  description = "ID de la distribución CloudFront"
+  description = "ID de la dist CloudFront"
 }
 
 output "distribution_arn" {
   value       = aws_cloudfront_distribution.this.arn
-  description = "ARN de la distribución CloudFront"
+  description = "ARN de la dist CloudFront"
 }
 
 output "domain_name" {

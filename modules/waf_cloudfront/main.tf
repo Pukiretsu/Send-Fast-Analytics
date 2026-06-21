@@ -4,7 +4,7 @@ locals {
 
 resource "aws_wafv2_web_acl" "this" {
   name        = local.name
-  description = "WAF administrado para proteger la distribución CloudFront de SendFast"
+  description = "WAF administrado para proteger la distribucion CloudFront de SendFast"
   scope       = "CLOUDFRONT"
 
   default_action {
